@@ -322,6 +322,49 @@ test("budget show lists every budget with where it stands", async () => {
   } finally { box.cleanup(); }
 });
 
+test("budget check: every setting read as written, problems named in order, bad JSON, and no file", async () => {
+  const box = world();
+  try {
+    fs.mkdirSync(box.guard, { recursive: true });
+    const guardFile = path.join(box.guard, "budgets.json");
+    const guardPath = new RegExp("^" + box.guard.replace(/[/\\^$*+?.()|[\]{}]/g, "\\$&") + "/budgets.json");
+    // a clean file: exit 0, and the count says how many budgets are in force
+    fs.writeFileSync(guardFile, JSON.stringify({ version: 1, global: { daily: { unit: "usd", amount: 15 }, weekly: { unit: "usd", amount: 80 }, mode: "soft" } }));
+    const clean = await budget(box, "check");
+    assert.equal(clean.code, 0, clean.err);
+    assert.equal(clean.out, "budgets.json: every setting is read as written (1 budgets).");
+    const cleanJ = JSON.parse((await budget(box, "check", "--json")).out);
+    assert.deepEqual(cleanJ, { ok: true, file: "budgets.json", invalid: false, problems: [], budgets: 1 });
+    // two problems: exit 1, one line per problem, in order, with the count line first
+    fs.writeFileSync(guardFile, JSON.stringify({ version: 1, global: { mode: "block", dialy: 1 } }));
+    const problems = await budget(box, "check");
+    assert.equal(problems.code, 1, problems.err);
+    assert.equal(problems.out, "budgets.json: 2 settings cannot be read as written.\n  global.mode is \"block\", which is neither \"hard\" nor \"soft\", so the budget is soft.\n  global has \"dialy\", a setting cost guard does not read, so it does nothing.");
+    const problemsJ = JSON.parse((await budget(box, "check", "--json")).out);
+    assert.equal(problemsJ.ok, false);
+    assert.equal(problemsJ.invalid, false);
+    assert.equal(problemsJ.budgets, 0);
+    assert.deepEqual(problemsJ.problems.map((p) => p.at), ["global.mode", "global.dialy"]);
+    assert.match(problemsJ.problems[0].text, /which is neither "hard" nor "soft", so the budget is soft/);
+    assert.match(problemsJ.problems[1].text, /a setting cost guard does not read, so it does nothing/);
+    // a file that is not JSON: the same line budget show prints, exit 1
+    fs.writeFileSync(guardFile, "{not json");
+    const broken = await budget(box, "check");
+    assert.equal(broken.code, 1, broken.err);
+    assert.match(broken.out, guardPath, broken.out);
+    assert.match(broken.out, / is not valid JSON, so no budget is in force. Fix it, or delete it to start again\./);
+    const brokenJ = JSON.parse((await budget(box, "check", "--json")).out);
+    assert.deepEqual(brokenJ, { ok: false, file: "budgets.json", invalid: true, problems: [], budgets: 0 });
+    // no file at all is not a mistake: exit 0
+    fs.unlinkSync(guardFile);
+    const none = await budget(box, "check");
+    assert.equal(none.code, 0, none.err);
+    assert.equal(none.out, "No budgets set.");
+    const noneJ = JSON.parse((await budget(box, "check", "--json")).out);
+    assert.deepEqual(noneJ, { ok: false, file: "budgets.json", invalid: false, problems: [], budgets: 0 });
+  } finally { box.cleanup(); }
+});
+
 test("budget extend raises today's limit and shows it; clear takes budgets away", async () => {
   const box = world();
   try {

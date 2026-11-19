@@ -4,6 +4,9 @@ All notable changes to Claude cost guard are written here. The format follows [K
 
 ## [Unreleased]
 
+- `budget check` reads `budgets.json` and exits 1 when a setting cannot be read as written, naming each problem under a count line (exit 0 when every setting reads); `--json` prints `{ ok, file, invalid, problems, budgets }` for scripts. Nothing is written, the index is not read, and the hook is untouched: a budgets file kept in dotfiles or copied between machines can be verified by a script before it is used.
+- For the good first issue [#12](https://github.com/nrzz/claude-cost-guard/issues/12).
+
 ## [1.4.0] - 2026-11-19
 
 - `budget set --model` and `budget show` suggest the closest model when a name matches nothing in your history: `opuss` gives `Did you mean "opus"?`. It compares the name with each model id and each `-`-separated word of it (words of at least 4 characters) and suggests one only when it is within 2 edits, so `xyz` gets no suggestion and the note reads as before. Nothing else changes: a name that matches prints no note, the hook is untouched, and the exit code stays 0.

@@ -29,6 +29,7 @@ Set up
 Budgets (dollars at API list prices, or fresh tokens: input + output + cache writes)
   claude-cost-guard budget set --daily <amount> [--weekly <amount>] [--project <dir> | --all] [--model <family>] [--mode soft|hard]
   claude-cost-guard budget show
+  claude-cost-guard budget check           reads budgets.json and exits 1 when a setting cannot be read as written
   claude-cost-guard budget clear [--project <dir> | --all] [--model <family>] [--daily] [--weekly]
   claude-cost-guard budget extend <amount> [--project <dir> | --all] [--model <family>]     raises today's limits; gone at midnight
   amounts: 15usd or '$15' (quote it: shells expand $15), 3M or 500k tokens
@@ -228,7 +229,7 @@ function cmdBudget(args, ctx) {
   const cfg = configDir(ctx.env);
   const today = dayKeyOf(ctx.now);
   const b = loadBudgets(cfg);
-  if (b.invalid && sub !== "show") throw new UserError(`${budgetsFile(cfg)} is not valid JSON. Fix it, or delete it to start again.`);
+  if (b.invalid && sub !== "show" && sub !== "check") throw new UserError(`${budgetsFile(cfg)} is not valid JSON. Fix it, or delete it to start again.`);
   // Settings in the file that could not be read as written: named by every budget command, so none goes unnoticed, and
   // a command that saves the file says that they are not kept in it.
   const fileNotes = b.problems.map((p) => `Note: in budgets.json, ${p.text}`);
@@ -327,7 +328,49 @@ function cmdBudget(args, ctx) {
     return 0;
   }
 
+  if (sub === "check") {
+    return cmdCheck(cfg, ctx.io, args);
+  }
+
   throw new UserError(`Unknown budget command "${sub}". Use set, show, clear or extend.`);
+}
+
+// Reads budgets.json exactly as budget show does, and says so with an exit code: 0 when every setting reads as
+// written, 1 when one or more cannot be read. Nothing is written, the index is not read, and the hook is untouched:
+// this is about the file only, so a script (or a dotfiles repository) can verify a budgets file before using it.
+function cmdCheck(cfg, io, args = {}) {
+  const file = "budgets.json";
+  const path = budgetsFile(cfg);
+  let missing = false;
+  let invalid = false;
+  let b;
+  if (!fs.existsSync(path)) {
+    missing = true;
+    b = { problems: [] };
+  } else {
+    b = loadBudgets(cfg);
+    invalid = b.invalid;
+  }
+  const problems = (b && b.problems) || [];
+  const budgets = (!missing && !invalid) ? entriesOf(b).length : 0;
+  const ok = !missing && !invalid && !problems.length;
+  const code = ok ? 0 : 1;
+  if (args.json) {
+    io.out(JSON.stringify({ ok, file, invalid, problems, budgets }, null, 2));
+    return code;
+  }
+  if (missing) { io.out("No budgets set."); return 0; }
+  if (invalid) {
+    io.out(`${path} is not valid JSON, so no budget is in force. Fix it, or delete it to start again.`);
+    return 1;
+  }
+  if (problems.length) {
+    io.out(`budgets.json: ${problems.length} settings cannot be read as written.`);
+    for (const p of problems) io.out(`  ${p.text}`);
+    return 1;
+  }
+  io.out(`budgets.json: every setting is read as written (${budgets} budgets).`);
+  return 0;
 }
 
 // One line per budget: its limits (with today's extension) and how full they are. `only` limits it to some budget keys
