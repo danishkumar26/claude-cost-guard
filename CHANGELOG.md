@@ -5,7 +5,7 @@ All notable changes to Claude cost guard are written here. The format follows [K
 ## [Unreleased]
 
 - `budget check --file <path>` checks a `budgets.json` before it is installed — for example the one in a dotfiles repository — instead of the installed file: the same problems in the same order, printed one per line after the count line, and the same exit codes (0 when every setting reads as written, 1 when there is a problem or the file is not valid JSON). `--json` prints `{ ok, file, invalid, problems, budgets }` with `file` set to that path. A missing file is refused (`<path>: no such file.`), `--file` without a value is refused like any other flag missing its value, and `--file` with any budget command other than `check` is refused (`--file works with budget check only.`). Nothing is written and the installed file is not read.
-- Contributed by [@danishkumar26](https://github.com/danishkumar26), for the good first issue [#16](https://github.com/nrzz/claude-cost-guard/issues/16).
+- Contributed by [@danishkumar26](https://github.com/danishkumar26) in [#20](https://github.com/nrzz/claude-cost-guard/pull/20), for the good first issue [#16](https://github.com/nrzz/claude-cost-guard/issues/16).
 
 ## [1.5.2] - 2026-11-19
 
